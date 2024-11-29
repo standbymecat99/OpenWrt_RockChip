@@ -104,20 +104,43 @@ jobs:
       run: |
         cd $OPENWRTROOT
         echo -e "$(nproc) thread compile"
-        make tools/compile -j$(nproc) || make tools/compile -j$(nproc)
-        make toolchain/compile -j$(nproc) || make toolchain/compile -j$(nproc)
-        make target/compile -j$(nproc) || make target/compile -j$(nproc) IGNORE_ERRORS=1
+        
+        # Compile tools with retries
+        make tools/compile -j$(nproc) || \
+        make tools/compile -j1 V=s
+
+        # Compile toolchain with retries
+        make toolchain/compile -j$(nproc) || \
+        make toolchain/compile -j1 V=s \
+
+        
+        # Target compile with error handling
+        make target/compile -j$(nproc) || \
+        make target/compile -j1 V=s || \
+        make target/compile -j$(nproc) IGNORE_ERRORS=1
+
+        # Generate diffconfig
         make diffconfig
-        make package/compile -j$(nproc) IGNORE_ERRORS=1 || make package/compile -j$(nproc) IGNORE_ERRORS=1
+        
+        # Package compile with multiple fallback attempts
+        make package/compile -j$(nproc) IGNORE_ERRORS=1 || \
+        make package/compile -j1 V=s || \
+        make package/compile -j$(nproc) IGNORE_ERRORS=1
+        
+        # Index generation
         make package/index
+        
+        # Set environment variables
         cd $OPENWRTROOT/bin/packages/*
         PLATFORM=$(basename `pwd`)
         echo "PLATFORM=$PLATFORM" >> $GITHUB_ENV
         echo "PLATFORM=$PLATFORM" >> $GITHUB_OUTPUT
+        
         cd $OPENWRTROOT/bin/targets/*
         TARGET=$(basename `pwd`)
         echo "TARGET=$TARGET" >> $GITHUB_ENV
         echo "TARGET=$TARGET" >> $GITHUB_OUTPUT
+        
         cd *
         SUBTARGET=$(basename `pwd`)
         echo "SUBTARGET=$SUBTARGET" >> $GITHUB_ENV
